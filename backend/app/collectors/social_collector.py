@@ -7,7 +7,7 @@ import asyncio
 import aiohttp
 from typing import Dict, List, Any
 from .base import BaseCollector
-from ..models.schemas import OSINTResult
+from ..models.schemas import CollectorResult
 
 
 class SocialCollector(BaseCollector):
@@ -97,7 +97,7 @@ class SocialCollector(BaseCollector):
                 "error": f"Unexpected error: {str(e)}"
             }
     
-    async def collect(self, target: str) -> OSINTResult:
+    async def collect(self, target: str) -> CollectorResult:
         """
         Search for username across multiple social media platforms.
         
@@ -105,7 +105,7 @@ class SocialCollector(BaseCollector):
             target: Username to search for
             
         Returns:
-            OSINTResult with findings from all platforms
+            CollectorResult with findings from all platforms
         """
         username = target.strip()
         
@@ -159,10 +159,10 @@ class SocialCollector(BaseCollector):
         found_platforms = [r for r in valid_results if r.get("found", False)]
         not_found_platforms = [r for r in valid_results if not r.get("found", False)]
         
-        return OSINTResult(
-            collector="social",
+        return CollectorResult(
+            collector_name="SocialCollector",
             target=username,
-            entity_type="person",
+            success=True,
             data={
                 "username": username,
                 "found_profiles": found_platforms,
@@ -174,8 +174,6 @@ class SocialCollector(BaseCollector):
                     "errors": len(results) - len(valid_results)
                 }
             },
-            raw_data=summary,
-            success=True,
             metadata={
                 "platforms_checked": list(self.PLATFORMS.keys()),
                 "user_agent": self.USER_AGENT
