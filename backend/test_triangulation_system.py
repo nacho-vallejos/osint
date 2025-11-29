@@ -12,7 +12,14 @@ import sys
 sys.path.append(str(Path(__file__).parent))
 
 from app.services.social_recon import SocialProfiler
-from app.services.video_intel import VideoIntelCollector
+
+# Video intelligence is optional
+try:
+    from app.services.video_intel import VideoIntelCollector
+    VIDEO_INTEL_AVAILABLE = True
+except ImportError:
+    VIDEO_INTEL_AVAILABLE = False
+    VideoIntelCollector = None
 
 
 async def test_social_profiling():
@@ -30,7 +37,7 @@ async def test_social_profiling():
         print(f"\n🔍 Searching for username: {username}")
         print("-" * 60)
         
-        results = await profiler.search_username(
+        results = await profiler.discover_profiles(
             username=username,
             platforms=["GitHub", "Twitter", "Instagram", "LinkedIn", "Reddit"]
         )
@@ -192,7 +199,7 @@ async def test_full_triangulation():
     # Step 1: Social Profiling
     print("\n📱 STEP 1: Social Media Reconnaissance")
     profiler = SocialProfiler(timeout=8)
-    social_results = await profiler.search_username(target_username, platforms=["GitHub", "Twitter", "LinkedIn"])
+    social_results = await profiler.discover_profiles(target_username, platforms=["GitHub", "Twitter", "LinkedIn"])
     found_profiles = [p for p in social_results if p.status.value == "found"]
     print(f"   Found {len(found_profiles)} profiles")
     
