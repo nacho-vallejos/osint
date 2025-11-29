@@ -7,6 +7,7 @@ from app.collectors.whois_collector import WhoisCollector
 from app.collectors.virustotal_collector import VirusTotalCollector
 from app.collectors.haveibeenpwned_collector import HaveIBeenPwnedCollector
 from app.collectors.securitytrails_collector import SecurityTrailsCollector
+from app.collectors.social_collector import SocialCollector
 
 # Register all collectors
 registry.register(DNSCollector)
@@ -15,6 +16,7 @@ registry.register(WhoisCollector)
 registry.register(VirusTotalCollector)
 registry.register(HaveIBeenPwnedCollector)
 registry.register(SecurityTrailsCollector)
+registry.register(SocialCollector)
 
 router = APIRouter()
 
