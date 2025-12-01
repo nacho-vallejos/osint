@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import router
 from app.api.triangulation_routes import router as triangulation_router
+from app.api.metadata_routes import router as metadata_router
 
 
 app = FastAPI(
@@ -20,6 +21,7 @@ app.add_middleware(
 
 app.include_router(router, prefix="/api/v1")
 app.include_router(triangulation_router, prefix="/api/v1")
+app.include_router(metadata_router, prefix="/api/v1/metadata", tags=["metadata"])
 
 
 @app.get("/health")
