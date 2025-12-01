@@ -9,6 +9,7 @@ from app.collectors.haveibeenpwned_collector import HaveIBeenPwnedCollector
 from app.collectors.securitytrails_collector import SecurityTrailsCollector
 from app.collectors.social_collector import SocialCollector
 from app.collectors.crtsh_collector import CrtshCollector
+from app.collectors.username_collector import UsernameCollector
 
 # Register all collectors
 registry.register(DNSCollector)
@@ -19,6 +20,7 @@ registry.register(HaveIBeenPwnedCollector)
 registry.register(SecurityTrailsCollector)
 registry.register(SocialCollector)
 registry.register(CrtshCollector)
+registry.register(UsernameCollector)
 
 router = APIRouter()
 
