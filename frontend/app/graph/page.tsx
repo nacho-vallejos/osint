@@ -37,7 +37,7 @@ export default function GraphPage() {
 
       const dnsResult = await dnsResponse.json();
 
-      if (dnsResult.success && dnsResult.data) {
+      if (dnsResult.success && dnsResult.data && dnsResult.data.records) {
         const newNodes: Node[] = [];
         const newEdges: Edge[] = [];
         let nodeId = 0;
@@ -50,9 +50,11 @@ export default function GraphPage() {
         });
 
         const mainNodeId = '0';
+        const records = dnsResult.data.records;
 
-        if (dnsResult.data.a_records) {
-          dnsResult.data.a_records.forEach((ip: string, idx: number) => {
+        // A Records
+        if (records.A && records.A.length > 0) {
+          records.A.forEach((ip: string, idx: number) => {
             const id = String(nodeId++);
             newNodes.push({
               id,
@@ -72,8 +74,9 @@ export default function GraphPage() {
           });
         }
 
-        if (dnsResult.data.mx_records) {
-          dnsResult.data.mx_records.forEach((mx: string, idx: number) => {
+        // MX Records
+        if (records.MX && records.MX.length > 0) {
+          records.MX.forEach((mx: string, idx: number) => {
             const id = String(nodeId++);
             newNodes.push({
               id,
@@ -93,8 +96,9 @@ export default function GraphPage() {
           });
         }
 
-        if (dnsResult.data.ns_records) {
-          dnsResult.data.ns_records.forEach((ns: string, idx: number) => {
+        // NS Records
+        if (records.NS && records.NS.length > 0) {
+          records.NS.forEach((ns: string, idx: number) => {
             const id = String(nodeId++);
             newNodes.push({
               id,
@@ -114,14 +118,38 @@ export default function GraphPage() {
           });
         }
 
-        if (dnsResult.data.txt_records) {
-          dnsResult.data.txt_records.forEach((txt: string, idx: number) => {
+        // AAAA Records (IPv6)
+        if (records.AAAA && records.AAAA.length > 0) {
+          records.AAAA.forEach((ipv6: string, idx: number) => {
+            const id = String(nodeId++);
+            const shortIPv6 = ipv6.length > 20 ? ipv6.substring(0, 20) + '...' : ipv6;
+            newNodes.push({
+              id,
+              type: 'custom',
+              position: { x: 300, y: 200 + idx * 80 },
+              data: { label: shortIPv6, type: 'ip', info: 'AAAA Record (IPv6)' },
+            });
+            newEdges.push({
+              id: `e-${mainNodeId}-${id}`,
+              source: mainNodeId,
+              target: id,
+              type: 'smoothstep',
+              animated: true,
+              label: 'AAAA',
+              markerEnd: { type: MarkerType.ArrowClosed },
+            });
+          });
+        }
+
+        // TXT Records
+        if (records.TXT && records.TXT.length > 0) {
+          records.TXT.forEach((txt: string, idx: number) => {
             const id = String(nodeId++);
             const shortTxt = txt.length > 30 ? txt.substring(0, 30) + '...' : txt;
             newNodes.push({
               id,
               type: 'custom',
-              position: { x: 600, y: idx * 80 },
+              position: { x: 600, y: idx * 80 - 100 },
               data: { label: shortTxt, type: 'dns', info: 'TXT Record' },
             });
             newEdges.push({
@@ -134,6 +162,32 @@ export default function GraphPage() {
               markerEnd: { type: MarkerType.ArrowClosed },
             });
           });
+        }
+
+        // CNAME Records
+        if (records.CNAME && records.CNAME.length > 0) {
+          records.CNAME.forEach((cname: string, idx: number) => {
+            const id = String(nodeId++);
+            newNodes.push({
+              id,
+              type: 'custom',
+              position: { x: -300, y: -150 - idx * 80 },
+              data: { label: cname, type: 'dns', info: 'CNAME Record' },
+            });
+            newEdges.push({
+              id: `e-${mainNodeId}-${id}`,
+              source: mainNodeId,
+              target: id,
+              type: 'smoothstep',
+              animated: true,
+              label: 'CNAME',
+              markerEnd: { type: MarkerType.ArrowClosed },
+            });
+          });
+        }
+
+        if (newNodes.length === 1) {
+          setError('No se encontraron registros DNS para este dominio');
         }
 
         setNodes(newNodes);
@@ -165,7 +219,7 @@ export default function GraphPage() {
               value={domain}
               onChange={(e) => setDomain(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Ingresa un dominio (ej: example.com)"
+              placeholder="Ingresa un dominio (ej: google.com)"
               className="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500"
               disabled={loading}
             />
