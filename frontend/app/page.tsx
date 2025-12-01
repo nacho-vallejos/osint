@@ -15,7 +15,19 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+          <Link 
+            href="/collectors"
+            className="block p-6 bg-slate-800 rounded-lg border border-slate-700 hover:border-green-500 transition-colors"
+          >
+            <h2 className="text-2xl font-bold text-green-400 mb-3">
+              🎯 All Collectors
+            </h2>
+            <p className="text-gray-300">
+              Execute all 10 OSINT collectors with interactive interface.
+            </p>
+          </Link>
+
           <Link 
             href="/graph"
             className="block p-6 bg-slate-800 rounded-lg border border-slate-700 hover:border-cyan-500 transition-colors"
@@ -24,7 +36,7 @@ export default function Home() {
               📊 Graph Viewer
             </h2>
             <p className="text-gray-300">
-              Interactive visualization of OSINT data relationships using React Flow and Dagre layout.
+              Interactive DNS visualization with React Flow.
             </p>
           </Link>
 
@@ -36,7 +48,7 @@ export default function Home() {
               👤 Username Search
             </h2>
             <p className="text-gray-300">
-              Search for username presence across 6 social media platforms in parallel.
+              Search usernames across 6 social platforms.
             </p>
           </Link>
 
@@ -50,7 +62,7 @@ export default function Home() {
               🔧 API Docs
             </h2>
             <p className="text-gray-300">
-              FastAPI interactive documentation with 10 OSINT collectors including Username Search.
+              FastAPI documentation with all endpoints.
             </p>
           </a>
         </div>
@@ -67,7 +79,7 @@ export default function Home() {
             <div className="text-gray-300 text-sm">✅ Social Collector</div>
             <div className="text-gray-300 text-sm">✅ Crtsh Collector</div>
             <div className="text-gray-300 text-sm">✅ Username Collector</div>
-            <div className="text-blue-400 text-sm font-bold">🆕 Metadata Collector</div>
+            <div className="text-gray-300 text-sm">✅ Metadata Collector</div>
           </div>
         </div>
 
