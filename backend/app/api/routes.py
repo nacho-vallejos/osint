@@ -11,6 +11,7 @@ from app.collectors.social_collector import SocialCollector
 from app.collectors.crtsh_collector import CrtshCollector
 from app.collectors.username_collector import UsernameCollector
 from app.collectors.metadata_collector import MetadataCollector
+from app.collectors.identity_collector import IdentityCollector
 
 # Register all collectors
 registry.register(DNSCollector)
@@ -23,6 +24,7 @@ registry.register(SocialCollector)
 registry.register(CrtshCollector)
 registry.register(UsernameCollector)
 registry.register(MetadataCollector)
+registry.register(IdentityCollector)
 
 router = APIRouter()
 

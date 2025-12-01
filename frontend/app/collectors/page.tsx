@@ -92,6 +92,13 @@ const COLLECTORS = [
     placeholder: 'example.com',
     supportsGraph: false
   },
+  { 
+    name: 'IdentityCollector', 
+    description: 'Person discovery: Gravatar + social media signals',
+    icon: '🔍',
+    placeholder: 'username or email',
+    supportsGraph: false
+  },
 ];
 
 export default function CollectorsPage() {
