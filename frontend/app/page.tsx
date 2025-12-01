@@ -14,7 +14,6 @@ export default function Home() {
             Open Source Intelligence Collection & Visualization
           </p>
         </div>
-            <div className="text-blue-400 text-sm font-bold">🆕 Metadata Collector</div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
           <Link 
@@ -55,33 +54,22 @@ export default function Home() {
             </p>
           </a>
         </div>
-            <div className="text-blue-400 text-sm font-bold">🆕 Metadata Collector</div>
 
         <div className="bg-slate-800 rounded-lg border border-slate-700 p-6">
           <h3 className="text-xl font-bold text-white mb-4">Available Collectors</h3>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <div className="text-gray-300 text-sm">✅ DNS Collector</div>
-            <div className="text-blue-400 text-sm font-bold">🆕 Metadata Collector</div>
             <div className="text-gray-300 text-sm">✅ Shodan Collector</div>
-            <div className="text-blue-400 text-sm font-bold">🆕 Metadata Collector</div>
             <div className="text-gray-300 text-sm">✅ Whois Collector</div>
-            <div className="text-blue-400 text-sm font-bold">🆕 Metadata Collector</div>
             <div className="text-gray-300 text-sm">✅ VirusTotal Collector</div>
-            <div className="text-blue-400 text-sm font-bold">🆕 Metadata Collector</div>
             <div className="text-gray-300 text-sm">✅ HaveIBeenPwned</div>
-            <div className="text-blue-400 text-sm font-bold">🆕 Metadata Collector</div>
             <div className="text-gray-300 text-sm">✅ SecurityTrails</div>
-            <div className="text-blue-400 text-sm font-bold">🆕 Metadata Collector</div>
             <div className="text-gray-300 text-sm">✅ Social Collector</div>
-            <div className="text-blue-400 text-sm font-bold">🆕 Metadata Collector</div>
             <div className="text-gray-300 text-sm">✅ Crtsh Collector</div>
-            <div className="text-blue-400 text-sm font-bold">🆕 Metadata Collector</div>
-            <div className="text-blue-400 text-sm font-bold">Username Collector</div>
+            <div className="text-gray-300 text-sm">✅ Username Collector</div>
             <div className="text-blue-400 text-sm font-bold">🆕 Metadata Collector</div>
           </div>
-            <div className="text-blue-400 text-sm font-bold">🆕 Metadata Collector</div>
         </div>
-            <div className="text-blue-400 text-sm font-bold">🆕 Metadata Collector</div>
 
         <div className="mt-8 text-center">
           <p className="text-gray-500 text-sm">
@@ -90,10 +78,7 @@ export default function Home() {
             Frontend: <span className="text-cyan-400">localhost:3000</span>
           </p>
         </div>
-            <div className="text-blue-400 text-sm font-bold">🆕 Metadata Collector</div>
       </div>
-            <div className="text-blue-400 text-sm font-bold">🆕 Metadata Collector</div>
     </div>
-            <div className="text-blue-400 text-sm font-bold">🆕 Metadata Collector</div>
   );
 }
