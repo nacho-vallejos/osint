@@ -15,7 +15,7 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6 mb-12">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
           <Link 
             href="/graph"
             className="block p-6 bg-slate-800 rounded-lg border border-slate-700 hover:border-cyan-500 transition-colors"
@@ -25,6 +25,18 @@ export default function Home() {
             </h2>
             <p className="text-gray-300">
               Interactive visualization of OSINT data relationships using React Flow and Dagre layout.
+            </p>
+          </Link>
+
+          <Link 
+            href="/username"
+            className="block p-6 bg-slate-800 rounded-lg border border-slate-700 hover:border-blue-500 transition-colors"
+          >
+            <h2 className="text-2xl font-bold text-blue-400 mb-3">
+              👤 Username Search
+            </h2>
+            <p className="text-gray-300">
+              Search for username presence across 6 social media platforms in parallel.
             </p>
           </Link>
 
@@ -38,7 +50,7 @@ export default function Home() {
               🔧 API Docs
             </h2>
             <p className="text-gray-300">
-              FastAPI interactive documentation with 7 OSINT collectors including Social Media search.
+              FastAPI interactive documentation with 9 OSINT collectors including Username Search.
             </p>
           </a>
         </div>
@@ -52,7 +64,9 @@ export default function Home() {
             <div className="text-gray-300 text-sm">✅ VirusTotal Collector</div>
             <div className="text-gray-300 text-sm">✅ HaveIBeenPwned</div>
             <div className="text-gray-300 text-sm">✅ SecurityTrails</div>
-            <div className="text-cyan-400 text-sm font-bold">🆕 Social Collector</div>
+            <div className="text-gray-300 text-sm">✅ Social Collector</div>
+            <div className="text-gray-300 text-sm">✅ Crtsh Collector</div>
+            <div className="text-blue-400 text-sm font-bold">🆕 Username Collector</div>
           </div>
         </div>
 
