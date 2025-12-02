@@ -1,3 +1,77 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    /* Professional Dark Theme Color Palette */
+    --color-primary: 59 130 246; /* blue-500 */
+    --color-secondary: 99 102 241; /* indigo-500 */
+    --color-accent: 139 92 246; /* purple-500 */
+    --color-success: 16 185 129; /* emerald-500 */
+    --color-warning: 245 158 11; /* amber-500 */
+    --color-error: 239 68 68; /* red-500 */
+    
+    /* Dark Neutral Palette */
+    --color-slate-950: 2 6 23;
+    --color-slate-900: 15 23 42;
+    --color-slate-800: 30 41 59;
+    --color-slate-700: 51 65 85;
+    --color-slate-400: 148 163 184;
+    --color-slate-300: 203 213 225;
+  }
+}
+
+@layer components {
+  /* Professional Dark Card */
+  .card-dark {
+    @apply bg-slate-900 rounded-xl border border-slate-800 shadow-sm hover:shadow-lg transition-all;
+  }
+  
+  /* Professional Dark Buttons */
+  .btn-primary-dark {
+    @apply inline-flex items-center justify-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-semibold shadow-lg shadow-blue-600/20;
+  }
+  
+  .btn-secondary-dark {
+    @apply inline-flex items-center justify-center px-6 py-3 bg-slate-800 text-slate-200 rounded-lg hover:bg-slate-700 transition-all font-semibold border border-slate-700 shadow-sm;
+  }
+  
+  /* Professional Dark Badges */
+  .badge-dark {
+    @apply px-3 py-1 rounded-full text-xs font-semibold border;
+  }
+  
+  .badge-blue-dark {
+    @apply badge-dark bg-blue-950/50 border-blue-800/50 text-blue-400;
+  }
+  
+  .badge-emerald-dark {
+    @apply badge-dark bg-emerald-950/50 border-emerald-800/50 text-emerald-400;
+  }
+}
+
+@layer utilities {
+  /* Smooth transitions for dark theme */
+  .transition-smooth-dark {
+    @apply transition-all duration-300 ease-in-out;
+  }
+  
+  /* Professional dark shadow hierarchy */
+  .shadow-dark {
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.3), 0 1px 2px -1px rgb(0 0 0 / 0.3);
+  }
+  
+  .shadow-dark-lg {
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.3), 0 4px 6px -4px rgb(0 0 0 / 0.3);
+  }
+  
+  /* Glow effects for dark theme */
+  .glow-blue {
+    box-shadow: 0 0 20px rgb(59 130 246 / 0.2);
+  }
+  
+  .glow-blue-lg {
+    box-shadow: 0 0 40px rgb(59 130 246 / 0.3);
+  }
+}
