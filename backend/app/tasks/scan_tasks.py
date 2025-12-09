@@ -14,7 +14,7 @@ from app.collectors.dns_collector import DNSCollector
 from app.collectors.username_collector import UsernameCollector
 from app.collectors.metadata_collector import MetadataCollector
 from app.collectors.identity_collector import IdentityCollector
-from app.collectors.social_search_collector import SocialSearchCollector
+# from app.collectors.social_search_collector import SocialSearchCollector
 from app.collectors.crtsh_collector import CrtshCollector
 from app.collectors.whois_collector import WhoisCollector
 from app.collectors.shodan_collector import ShodanCollector
@@ -35,7 +35,7 @@ COLLECTOR_MAP = {
     "username": UsernameCollector,
     "metadata": MetadataCollector,
     "identity": IdentityCollector,
-    "social": SocialCollector,
+    # "social": SocialCollector,  # Disabled - module not found
     "crtsh": CrtshCollector,
     "whois": WhoisCollector,
     "shodan": ShodanCollector,

@@ -11,6 +11,7 @@ from app.api.osint_framework_routes import router as osint_framework_router
 from app.routers.scan import router as scan_router
 from app.routers.websocket import router as websocket_router
 from app.routers.history import router as history_router
+from app.routers.video_analysis import router as video_router
 from app.database import init_db
 
 
@@ -39,8 +40,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="OSINT Platform API",
-    description="API for OSINT data collection and analysis with Identity Triangulation, Async Task Queue, Real-time WebSocket Notifications, Credits-based Rate Limiting, and Complete Audit Trail",
-    version="2.4.0",
+    description="API for OSINT data collection and analysis with Identity Triangulation, Async Task Queue, Real-time WebSocket Notifications, Credits-based Rate Limiting, Complete Audit Trail, and Video Facial Detection",
+    version="2.5.0",
     lifespan=lifespan
 )
 
@@ -59,8 +60,9 @@ app.include_router(osint_framework_router, prefix="/api/v1/osint-framework", tag
 app.include_router(scan_router, prefix="/api/v1", tags=["async-scans"])
 app.include_router(websocket_router, tags=["websockets"])
 app.include_router(history_router, prefix="/api/v1", tags=["history"])
+app.include_router(video_router, prefix="/api/v1", tags=["video-analysis"])
 
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "service": "osint-platform", "version": "2.3.0"}
+    return {"status": "healthy", "service": "osint-platform", "version": "2.5.0"}
