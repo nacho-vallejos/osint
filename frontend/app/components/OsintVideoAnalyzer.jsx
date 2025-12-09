@@ -1,6 +1,11 @@
 /**
  * OSINT Video Facial Detection Analyzer
- * Version 3.2.0 - MediaPipe with improved synchronization
+ * Version 3.2.1 - Fixed visual tracking lag and audio alert display
+ * 
+ * Key improvements:
+ * - Uses closest timestamp matching for smooth face tracking (no lag)
+ * - Prominent red warning overlay for audio keyword matches
+ * - Proper canvas synchronization with video dimensions
  */
 
 'use client';
@@ -85,106 +90,119 @@ const OsintVideoAnalyzer = () => {
 
     const ctx = canvas.getContext('2d');
 
+    // Ensure canvas matches video dimensions for proper overlay
     if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
     }
 
+    // Clear canvas for fresh frame
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const currentTime = video.currentTime;
+    const SYNC_THRESHOLD = 0.15; // seconds
 
-    // Find face detections for current timestamp (improved sync with tighter tolerance)
-    const relevantDetections = analysisResults.faces.filter(
-      detection => Math.abs(detection.timestamp - currentTime) <= 0.1
-    );
+    // **CRITICAL FIX: Find CLOSEST face detection instead of filtering**
+    // This eliminates lag by always showing the nearest available detection
+    let closestDetection = null;
+    let minTimeDiff = Infinity;
 
-    if (relevantDetections.length > 0) {
-      relevantDetections.forEach((detection) => {
-        // Each detection now has a "faces" array
-        detection.faces.forEach((face) => {
-          const [ymin, xmin, height, width] = face.box;
+    for (const detection of analysisResults.faces) {
+      const timeDiff = Math.abs(detection.timestamp - currentTime);
+      if (timeDiff < SYNC_THRESHOLD && timeDiff < minTimeDiff) {
+        minTimeDiff = timeDiff;
+        closestDetection = detection;
+      }
+    }
 
-          ctx.strokeStyle = '#00ff41';
-          ctx.lineWidth = 3;
-          ctx.shadowBlur = 12;
-          ctx.shadowColor = '#00ff41';
+    // Draw face bounding boxes from closest detection
+    if (closestDetection && closestDetection.faces.length > 0) {
+      closestDetection.faces.forEach((face) => {
+        // Backend returns [ymin, xmin, height, width] in pixel coordinates
+        const [ymin, xmin, height, width] = face.box;
 
-          ctx.strokeRect(xmin, ymin, width, height);
+        // Draw main bounding box
+        ctx.strokeStyle = '#00FF00'; // Green
+        ctx.lineWidth = 3;
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = '#00FF00';
+        ctx.strokeRect(xmin, ymin, width, height);
 
-          // Corner accents
-          const cornerSize = 15;
-          ctx.lineWidth = 5;
+        // Corner accents for sci-fi look
+        const cornerSize = 15;
+        ctx.lineWidth = 5;
 
-          // Top-left
-          ctx.beginPath();
-          ctx.moveTo(xmin, ymin + cornerSize);
-          ctx.lineTo(xmin, ymin);
-          ctx.lineTo(xmin + cornerSize, ymin);
-          ctx.stroke();
+        // Top-left corner
+        ctx.beginPath();
+        ctx.moveTo(xmin, ymin + cornerSize);
+        ctx.lineTo(xmin, ymin);
+        ctx.lineTo(xmin + cornerSize, ymin);
+        ctx.stroke();
 
-          // Top-right
-          ctx.beginPath();
-          ctx.moveTo(xmin + width - cornerSize, ymin);
-          ctx.lineTo(xmin + width, ymin);
-          ctx.lineTo(xmin + width, ymin + cornerSize);
-          ctx.stroke();
+        // Top-right corner
+        ctx.beginPath();
+        ctx.moveTo(xmin + width - cornerSize, ymin);
+        ctx.lineTo(xmin + width, ymin);
+        ctx.lineTo(xmin + width, ymin + cornerSize);
+        ctx.stroke();
 
-          // Bottom-left
-          ctx.beginPath();
-          ctx.moveTo(xmin, ymin + height - cornerSize);
-          ctx.lineTo(xmin, ymin + height);
-          ctx.lineTo(xmin + cornerSize, ymin + height);
-          ctx.stroke();
+        // Bottom-left corner
+        ctx.beginPath();
+        ctx.moveTo(xmin, ymin + height - cornerSize);
+        ctx.lineTo(xmin, ymin + height);
+        ctx.lineTo(xmin + cornerSize, ymin + height);
+        ctx.stroke();
 
-          // Bottom-right
-          ctx.beginPath();
-          ctx.moveTo(xmin + width - cornerSize, ymin + height);
-          ctx.lineTo(xmin + width, ymin + height);
-          ctx.lineTo(xmin + width, ymin + height - cornerSize);
-          ctx.stroke();
+        // Bottom-right corner
+        ctx.beginPath();
+        ctx.moveTo(xmin + width - cornerSize, ymin + height);
+        ctx.lineTo(xmin + width, ymin + height);
+        ctx.lineTo(xmin + width, ymin + height - cornerSize);
+        ctx.stroke();
 
-          // Label with confidence
-          ctx.font = 'bold 14px monospace';
-          ctx.fillStyle = '#00ff41';
-          ctx.shadowBlur = 8;
-          const confidence = (face.confidence * 100).toFixed(0);
-          ctx.fillText(`TARGET ${confidence}%`, xmin, ymin - 8);
-        });
+        // Confidence label
+        ctx.font = 'bold 14px monospace';
+        ctx.fillStyle = '#00FF00';
+        ctx.shadowBlur = 8;
+        const confidence = (face.confidence * 100).toFixed(0);
+        ctx.fillText(`TARGET ${confidence}%`, xmin, ymin - 8);
       });
     }
 
-    // Audio alerts
+    // **AUDIO ALERTS: Display prominent red warning overlay**
     if (analysisResults.audio_alerts && analysisResults.audio_alerts.length > 0) {
-      const relevantAlerts = analysisResults.audio_alerts.filter(
-        alert => currentTime >= alert.start && currentTime <= alert.end + 1.0
+      const activeAlerts = analysisResults.audio_alerts.filter(
+        alert => currentTime >= alert.start && currentTime <= alert.end
       );
 
-      if (relevantAlerts.length > 0) {
-        ctx.fillStyle = 'rgba(255, 0, 255, 0.85)';
+      if (activeAlerts.length > 0) {
+        // Red warning overlay at top of canvas
+        const overlayHeight = 80;
+        ctx.fillStyle = 'rgba(220, 38, 38, 0.9)'; // Red background
         ctx.shadowBlur = 20;
-        ctx.shadowColor = '#ff00ff';
-        ctx.fillRect(10, 10, canvas.width - 20, 60 * relevantAlerts.length);
+        ctx.shadowColor = '#dc2626';
+        ctx.fillRect(0, 0, canvas.width, overlayHeight);
         
-        ctx.font = 'bold 18px monospace';
+        // Warning text
+        ctx.font = 'bold 24px monospace';
         ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
         ctx.shadowColor = '#000000';
-        ctx.shadowBlur = 5;
+        ctx.shadowBlur = 8;
         
-        relevantAlerts.forEach((alert, index) => {
-          ctx.fillText(
-            `🎤 KEYWORD: "${alert.keyword}"`, 
-            20, 
-            35 + (index * 60)
-          );
-          ctx.font = '14px monospace';
-          ctx.fillText(
-            `"${alert.text.substring(0, 50)}${alert.text.length > 50 ? '...' : ''}"`,
-            20,
-            55 + (index * 60)
-          );
-          ctx.font = 'bold 18px monospace';
-        });
+        const alertText = `⚠️ MATCH: ${activeAlerts[0].keyword.toUpperCase()}`;
+        ctx.fillText(alertText, canvas.width / 2, 35);
+        
+        // Additional context
+        ctx.font = '14px monospace';
+        ctx.fillText(
+          `"${activeAlerts[0].text.substring(0, 60)}${activeAlerts[0].text.length > 60 ? '...' : ''}"`,
+          canvas.width / 2,
+          60
+        );
+        
+        // Reset text alignment
+        ctx.textAlign = 'left';
       }
     }
   };
@@ -205,10 +223,10 @@ const OsintVideoAnalyzer = () => {
       <div className="max-w-6xl mx-auto">
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-white mb-2">
-            OSINT Video Analysis Platform v3.2
+            OSINT Video Analysis Platform v3.2.1
           </h1>
           <p className="text-slate-400">
-            MediaPipe face detection with precise timestamp synchronization and Faster-Whisper audio analysis
+            Enhanced OpenCV face detection with lag-free tracking and Faster-Whisper audio analysis
           </p>
         </div>
 
@@ -391,8 +409,8 @@ const OsintVideoAnalyzer = () => {
             <div className="mt-6 bg-slate-800 rounded-lg p-4 border border-slate-700">
               <h3 className="text-sm font-bold text-white mb-2">Detection Information</h3>
               <div className="text-xs text-slate-400 space-y-1">
-                <p>• <span className="text-emerald-400">Green boxes</span>: MediaPipe face detections with confidence scores</p>
-                <p>• <span className="text-pink-400">Pink banners</span>: Audio keyword matches during playback</p>
+                <p>• <span className="text-emerald-400">Green boxes</span>: Face detections with confidence scores (closest timestamp matching)</p>
+                <p>• <span className="text-red-400">Red warning overlay</span>: Audio keyword matches in real-time</p>
                 <p>• Method: {analysisResults.detection_config.face_detector}</p>
                 <p>• Confidence threshold: {analysisResults.detection_config.min_confidence}</p>
                 <p>• Frame skip: Every {analysisResults.detection_config.frame_skip} frames</p>
@@ -406,14 +424,15 @@ const OsintVideoAnalyzer = () => {
         )}
 
         <div className="mt-6 bg-slate-900/50 border border-slate-800 rounded-lg p-6">
-          <h3 className="text-lg font-bold text-white mb-3">What's New in v3.2</h3>
+          <h3 className="text-lg font-bold text-white mb-3">What's New in v3.2.1</h3>
           <ul className="space-y-2 text-slate-400 text-sm list-disc list-inside">
-            <li>MediaPipe face detection for improved accuracy</li>
+            <li><span className="text-emerald-400 font-semibold">Fixed visual tracking lag</span> - Uses closest timestamp matching for smooth face detection overlay</li>
+            <li><span className="text-red-400 font-semibold">Prominent audio alerts</span> - Red warning overlay displays when keywords are detected</li>
+            <li>Enhanced OpenCV face detection (Frontal + Profile Haar Cascades)</li>
             <li>Precise timestamp synchronization using CAP_PROP_POS_MSEC</li>
-            <li>Audio alerts with start/end times for better tracking</li>
+            <li>Audio alerts with start/end times for accurate matching</li>
             <li>VAD (Voice Activity Detection) to skip silence in transcription</li>
-            <li>Base model for Faster-Whisper (better accuracy)</li>
-            <li>Tighter sync tolerance (±0.1s) for smoother playback</li>
+            <li>Faster-Whisper base model for improved Spanish transcription</li>
           </ul>
         </div>
       </div>
