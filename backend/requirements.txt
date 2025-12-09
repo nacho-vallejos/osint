@@ -1,38 +1,22 @@
-# FastAPI & Web Framework
+# FastAPI and server
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
-pydantic==2.10.0
-pydantic-settings==2.6.0
-python-dotenv==1.0.1
+python-multipart==0.0.12
 
-# HTTP & DNS
-dnspython==2.7.0
-httpx==0.28.0
-aiohttp==3.10.0
+# Video processing
+opencv-python==4.8.1.78
 
-# Video Intelligence
-opencv-python==4.9.0.80
-face-recognition==1.3.0
+# Audio processing
 moviepy==1.0.3
-openai-whisper==20231117
+faster-whisper==1.0.3
+
+# ML/AI dependencies
 numpy==1.24.3
 
-# Celery for async tasks with Redis
-celery[redis]==5.3.4
-redis[asyncio]==5.0.1
-kombu==5.3.4  # Celery messaging library
-flower==2.0.1  # Celery monitoring web UI
+# Database and caching
+redis==5.0.1
+celery==5.3.4
 
-# Neo4j graph database
-neo4j==5.14.1
-
-# Image Processing (for metadata collector)
-Pillow==10.1.0
-piexif==1.1.3
-
-# Database
-sqlalchemy==2.0.36
-psycopg2-binary==2.9.9  # PostgreSQL adapter
-
-# Rate Limiting
-fastapi-limiter==0.1.6
+# Utilities
+python-dotenv==1.0.0
+pydantic==2.9.2

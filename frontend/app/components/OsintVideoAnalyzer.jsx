@@ -1,27 +1,30 @@
 /**
- * OSINT Video Facial Detection Analyzer - Client-Side Only
+ * OSINT Video Facial Detection Analyzer
  * 
- * Uses face-api.js for browser-based facial detection without backend dependency
+ * Connects to FastAPI backend for:
+ * - Face detection using OpenCV (DNN/Haar)
+ * - Audio transcription using Faster-Whisper
+ * - Keyword spotting in audio
  */
 
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Play, AlertCircle, CheckCircle, Loader, Download } from 'lucide-react';
+import { Upload, Play, AlertCircle, CheckCircle, Loader, FileText, Volume2 } from 'lucide-react';
 
 const OsintVideoAnalyzer = () => {
   // State management
   const [videoFile, setVideoFile] = useState(null);
   const [videoSrcUrl, setVideoSrcUrl] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [keywords, setKeywords] = useState('');
+  const [analysisResults, setAnalysisResults] = useState(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState('');
-  const [processingComplete, setProcessingComplete] = useState(false);
-  const [detectionStats, setDetectionStats] = useState({ frames: 0, faces: 0 });
+  const [analysisComplete, setAnalysisComplete] = useState(false);
 
   // Refs for video and canvas elements
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
-  const animationFrameRef = useRef(null);
 
   /**
    * Handle file selection
@@ -40,73 +43,64 @@ const OsintVideoAnalyzer = () => {
 
     // Reset states
     setError('');
-    setProcessingComplete(false);
-    setDetectionStats({ frames: 0, faces: 0 });
+    setAnalysisResults(null);
+    setAnalysisComplete(false);
 
     // Store file and create preview URL
     setVideoFile(file);
     const url = URL.createObjectURL(file);
     setVideoSrcUrl(url);
-    setProcessingComplete(true); // Ready to play
   };
 
   /**
-   * Simple face detection using color-based heuristics
-   * Detects skin-tone regions as potential faces
+   * Start analysis by uploading to backend
    */
-  const detectFaces = (ctx, width, height) => {
-    const imageData = ctx.getImageData(0, 0, width, height);
-    const data = imageData.data;
-    const detections = [];
-    const blockSize = 20; // Sample every 20 pixels for performance
-    
-    // Simple skin tone detection (very basic)
-    for (let y = 0; y < height; y += blockSize) {
-      for (let x = 0; x < width; x += blockSize) {
-        const i = (y * width + x) * 4;
-        const r = data[i];
-        const g = data[i + 1];
-        const b = data[i + 2];
-        
-        // Basic skin tone detection heuristic
-        if (r > 95 && g > 40 && b > 20 &&
-            r > g && r > b &&
-            Math.abs(r - g) > 15 &&
-            Math.max(r, g, b) - Math.min(r, g, b) > 15) {
-          
-          // Found potential face region
-          detections.push({
-            x: x,
-            y: y,
-            width: 100,
-            height: 100
-          });
-        }
-      }
+  const startAnalysis = async () => {
+    if (!videoFile) {
+      setError('Please select a video file first');
+      return;
     }
-    
-    // Merge nearby detections
-    const merged = [];
-    detections.forEach(det => {
-      const nearby = merged.find(m => 
-        Math.abs(m.x - det.x) < 50 && Math.abs(m.y - det.y) < 50
-      );
-      if (!nearby) {
-        merged.push(det);
+
+    setIsAnalyzing(true);
+    setError('');
+
+    try {
+      // Create FormData
+      const formData = new FormData();
+      formData.append('file', videoFile);
+      formData.append('keywords', keywords);
+
+      // Upload to backend
+      const response = await fetch('http://localhost:8000/analyze', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Analysis failed');
       }
-    });
-    
-    return merged;
+
+      const data = await response.json();
+      setAnalysisResults(data);
+      setAnalysisComplete(true);
+
+    } catch (err) {
+      setError(`Analysis failed: ${err.message}`);
+      console.error('Analysis error:', err);
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   /**
-   * Draw face bounding boxes on canvas
+   * Draw face bounding boxes on canvas overlay
    */
-  const drawFaceBoxes = () => {
+  const handleTimeUpdate = () => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
 
-    if (!video || !canvas || !processingComplete) return;
+    if (!video || !canvas || !analysisResults) return;
 
     const ctx = canvas.getContext('2d');
 
@@ -119,18 +113,18 @@ const OsintVideoAnalyzer = () => {
     // Clear previous drawings
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Draw current video frame to hidden canvas for analysis
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = video.videoWidth;
-    tempCanvas.height = video.videoHeight;
-    const tempCtx = tempCanvas.getContext('2d');
-    tempCtx.drawImage(video, 0, 0);
+    // Get current timestamp
+    const currentTime = video.currentTime;
 
-    // Detect faces in current frame
-    const faces = detectFaces(tempCtx, video.videoWidth, video.videoHeight);
+    // Find detections within 0.2 seconds of current time
+    const relevantDetections = analysisResults.faces.filter(
+      detection => Math.abs(detection.timestamp - currentTime) <= 0.2
+    );
 
-    if (faces.length > 0) {
-      faces.forEach((face) => {
+    if (relevantDetections.length > 0) {
+      relevantDetections.forEach((detection) => {
+        const [ymin, xmin, height, width] = detection.box;
+
         // Style: Cyber/OSINT aesthetic with glowing green
         ctx.strokeStyle = '#00ff41';
         ctx.lineWidth = 4;
@@ -138,7 +132,7 @@ const OsintVideoAnalyzer = () => {
         ctx.shadowColor = '#00ff41';
 
         // Draw rectangle
-        ctx.strokeRect(face.x, face.y, face.width, face.height);
+        ctx.strokeRect(xmin, ymin, width, height);
 
         // Add corner accents
         const cornerSize = 20;
@@ -146,60 +140,61 @@ const OsintVideoAnalyzer = () => {
 
         // Top-left corner
         ctx.beginPath();
-        ctx.moveTo(face.x, face.y + cornerSize);
-        ctx.lineTo(face.x, face.y);
-        ctx.lineTo(face.x + cornerSize, face.y);
+        ctx.moveTo(xmin, ymin + cornerSize);
+        ctx.lineTo(xmin, ymin);
+        ctx.lineTo(xmin + cornerSize, ymin);
         ctx.stroke();
 
         // Top-right corner
         ctx.beginPath();
-        ctx.moveTo(face.x + face.width - cornerSize, face.y);
-        ctx.lineTo(face.x + face.width, face.y);
-        ctx.lineTo(face.x + face.width, face.y + cornerSize);
+        ctx.moveTo(xmin + width - cornerSize, ymin);
+        ctx.lineTo(xmin + width, ymin);
+        ctx.lineTo(xmin + width, ymin + cornerSize);
         ctx.stroke();
 
         // Bottom-left corner
         ctx.beginPath();
-        ctx.moveTo(face.x, face.y + face.height - cornerSize);
-        ctx.lineTo(face.x, face.y + face.height);
-        ctx.lineTo(face.x + cornerSize, face.y + face.height);
+        ctx.moveTo(xmin, ymin + height - cornerSize);
+        ctx.lineTo(xmin, ymin + height);
+        ctx.lineTo(xmin + cornerSize, ymin + height);
         ctx.stroke();
 
         // Bottom-right corner
         ctx.beginPath();
-        ctx.moveTo(face.x + face.width - cornerSize, face.y + face.height);
-        ctx.lineTo(face.x + face.width, face.y + face.height);
-        ctx.lineTo(face.x + face.width, face.y + face.height - cornerSize);
+        ctx.moveTo(xmin + width - cornerSize, ymin + height);
+        ctx.lineTo(xmin + width, ymin + height);
+        ctx.lineTo(xmin + width, ymin + height - cornerSize);
         ctx.stroke();
 
         // Add "TARGET" label
         ctx.font = 'bold 16px monospace';
         ctx.fillStyle = '#00ff41';
         ctx.shadowBlur = 10;
-        ctx.fillText('TARGET', face.x, face.y - 10);
+        ctx.fillText(`TARGET ${(detection.confidence * 100).toFixed(0)}%`, xmin, ymin - 10);
       });
     }
 
-    // Continue animation loop
-    animationFrameRef.current = requestAnimationFrame(drawFaceBoxes);
-  };
+    // Highlight audio keywords
+    if (analysisResults.audio_hits) {
+      const relevantAudioHits = analysisResults.audio_hits.filter(
+        hit => Math.abs(hit.timestamp - currentTime) <= 1.0
+      );
 
-  /**
-   * Start face detection when video plays
-   */
-  const handleVideoPlay = () => {
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-    }
-    drawFaceBoxes();
-  };
-
-  /**
-   * Stop detection when video pauses
-   */
-  const handleVideoPause = () => {
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
+      if (relevantAudioHits.length > 0) {
+        // Draw audio indicator
+        ctx.fillStyle = '#ff00ff';
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = '#ff00ff';
+        ctx.font = 'bold 20px monospace';
+        
+        relevantAudioHits.forEach((hit, index) => {
+          ctx.fillText(
+            `🎤 "${hit.keyword}" detected`, 
+            20, 
+            30 + (index * 30)
+          );
+        });
+      }
     }
   };
 
@@ -211,9 +206,6 @@ const OsintVideoAnalyzer = () => {
       if (videoSrcUrl) {
         URL.revokeObjectURL(videoSrcUrl);
       }
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
     };
   }, [videoSrcUrl]);
 
@@ -223,17 +215,18 @@ const OsintVideoAnalyzer = () => {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-white mb-2">
-            OSINT Video Facial Detection
+            OSINT Video Analysis Platform
           </h1>
           <p className="text-slate-400">
-            Upload a video to detect and track faces with real-time overlay visualization (browser-based)
+            AI-powered facial detection and audio keyword spotting with OpenCV and Faster-Whisper
           </p>
         </div>
 
         {/* Upload Section */}
         <div className="bg-slate-900 rounded-xl border border-slate-800 p-6 mb-6">
-          <div className="flex items-center gap-4 mb-4">
-            <div className="flex-1">
+          <div className="space-y-4">
+            {/* File upload */}
+            <div>
               <label
                 htmlFor="video-upload"
                 className="flex items-center justify-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg cursor-pointer transition-all font-semibold"
@@ -249,13 +242,55 @@ const OsintVideoAnalyzer = () => {
                 className="hidden"
               />
             </div>
-          </div>
 
-          {videoFile && (
-            <div className="text-sm text-slate-400">
-              <span className="text-blue-400 font-medium">Selected:</span> {videoFile.name}
+            {videoFile && (
+              <div className="text-sm text-slate-400">
+                <span className="text-blue-400 font-medium">Selected:</span> {videoFile.name}
+              </div>
+            )}
+
+            {/* Keywords input */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Audio Keywords (comma-separated, optional)
+              </label>
+              <input
+                type="text"
+                value={keywords}
+                onChange={(e) => setKeywords(e.target.value)}
+                placeholder="e.g. bomb, weapon, suspicious"
+                className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                Enter keywords to search for in the audio track. Leave empty to skip audio analysis.
+              </p>
             </div>
-          )}
+
+            {/* Analyze button */}
+            {videoFile && !analysisComplete && (
+              <button
+                onClick={startAnalysis}
+                disabled={isAnalyzing}
+                className={`flex items-center justify-center px-6 py-3 rounded-lg font-semibold transition-all ${
+                  isAnalyzing
+                    ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                    : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                }`}
+              >
+                {isAnalyzing ? (
+                  <>
+                    <Loader className="w-5 h-5 mr-2 animate-spin" />
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-5 h-5 mr-2" />
+                    Start Analysis
+                  </>
+                )}
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Status Messages */}
@@ -266,19 +301,73 @@ const OsintVideoAnalyzer = () => {
           </div>
         )}
 
-        {processingComplete && (
+        {analysisComplete && (
           <div className="bg-emerald-950/50 border border-emerald-800 rounded-lg p-4 mb-6 flex items-start gap-3">
             <CheckCircle className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
             <div className="text-emerald-300">
-              Video loaded! Press play to start real-time face detection. Detection runs in your browser using color-based analysis.
+              Analysis complete! Found {analysisResults.faces.length} face detections
+              {analysisResults.audio_hits.length > 0 && ` and ${analysisResults.audio_hits.length} audio keyword matches`}.
             </div>
           </div>
         )}
 
+        {/* Analysis Results Stats */}
+        {analysisResults && (
+          <div className="bg-slate-900 rounded-xl border border-slate-800 p-6 mb-6">
+            <h2 className="text-xl font-bold text-white mb-4">Analysis Results</h2>
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+                <div className="text-2xl font-bold text-blue-400">{analysisResults.video_duration}s</div>
+                <div className="text-sm text-slate-400">Duration</div>
+              </div>
+              
+              <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+                <div className="text-2xl font-bold text-emerald-400">{analysisResults.faces.length}</div>
+                <div className="text-sm text-slate-400">Face Detections</div>
+              </div>
+              
+              <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+                <div className="text-2xl font-bold text-purple-400">{analysisResults.frames_analyzed}</div>
+                <div className="text-sm text-slate-400">Frames Analyzed</div>
+              </div>
+              
+              <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+                <div className="text-2xl font-bold text-pink-400">{analysisResults.audio_hits.length}</div>
+                <div className="text-sm text-slate-400">Audio Matches</div>
+              </div>
+            </div>
+
+            {/* Audio hits list */}
+            {analysisResults.audio_hits.length > 0 && (
+              <div className="mt-6">
+                <h3 className="text-lg font-bold text-white mb-3 flex items-center">
+                  <Volume2 className="w-5 h-5 mr-2 text-pink-400" />
+                  Audio Keyword Matches
+                </h3>
+                <div className="space-y-2">
+                  {analysisResults.audio_hits.map((hit, index) => (
+                    <div key={index} className="bg-slate-800 rounded-lg p-3 border border-slate-700">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <span className="text-pink-400 font-mono text-sm">{hit.timestamp.toFixed(1)}s</span>
+                          <span className="text-slate-500 mx-2">•</span>
+                          <span className="text-emerald-400 font-semibold">"{hit.keyword}"</span>
+                        </div>
+                      </div>
+                      <div className="text-sm text-slate-300 mt-1">"{hit.text}"</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Video Player with Canvas Overlay */}
-        {videoSrcUrl && (
+        {videoSrcUrl && analysisComplete && (
           <div className="bg-slate-900 rounded-xl border border-slate-800 p-6">
-            <h2 className="text-xl font-bold text-white mb-4">Video Playback</h2>
+            <h2 className="text-xl font-bold text-white mb-4">Video Playback with Detections</h2>
             
             {/* Container with relative positioning */}
             <div className="relative inline-block">
@@ -287,8 +376,7 @@ const OsintVideoAnalyzer = () => {
                 ref={videoRef}
                 src={videoSrcUrl}
                 controls
-                onPlay={handleVideoPlay}
-                onPause={handleVideoPause}
+                onTimeUpdate={handleTimeUpdate}
                 className="max-w-full rounded-lg"
                 style={{ display: 'block' }}
               />
@@ -303,15 +391,18 @@ const OsintVideoAnalyzer = () => {
               />
             </div>
 
-            {/* Info */}
+            {/* Detection info */}
             <div className="mt-6 bg-slate-800 rounded-lg p-4 border border-slate-700">
-              <h3 className="text-sm font-bold text-white mb-2">ℹ️ Detection Method</h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                This tool uses client-side skin-tone color analysis for face detection. 
-                It runs entirely in your browser without uploading data to any server. 
-                Detection accuracy may vary based on lighting conditions and video quality.
-                For production use, consider server-side ML models like OpenCV or face-api.js.
-              </p>
+              <h3 className="text-sm font-bold text-white mb-2">Detection Information</h3>
+              <div className="text-xs text-slate-400 space-y-1">
+                <p>• <span className="text-emerald-400">Green boxes</span>: Face detections with confidence scores</p>
+                <p>• <span className="text-pink-400">Pink text</span>: Audio keyword matches at current timestamp</p>
+                <p>• Method: {analysisResults.detection_config.face_detector}</p>
+                <p>• Confidence threshold: {analysisResults.detection_config.min_confidence}</p>
+                {analysisResults.detection_config.audio_model !== 'disabled' && (
+                  <p>• Audio model: {analysisResults.detection_config.audio_model}</p>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -321,10 +412,10 @@ const OsintVideoAnalyzer = () => {
           <h3 className="text-lg font-bold text-white mb-3">Instructions</h3>
           <ol className="space-y-2 text-slate-400 text-sm list-decimal list-inside">
             <li>Click "Select Video File" and choose a video (MP4, AVI, MOV, MKV, WEBM)</li>
-            <li>The video will load in the player below</li>
-            <li>Press play - green bounding boxes will appear over detected faces in real-time</li>
-            <li>Detection runs continuously while video plays</li>
-            <li>All processing happens in your browser - no data is uploaded</li>
+            <li>Optionally, enter keywords to search for in the audio (comma-separated)</li>
+            <li>Click "Start Analysis" to process the video on the server</li>
+            <li>Wait for analysis to complete (this may take a minute for longer videos)</li>
+            <li>Play the video to see face detections and audio keyword matches in real-time</li>
           </ol>
         </div>
       </div>
