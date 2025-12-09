@@ -1,11 +1,12 @@
 """
 OSINT Video Analysis Platform - Backend API
-Version: 3.1.0 - Enhanced tracking and audio analysis
+Version: 3.2.0 - Enhanced OpenCV with improved synchronization
 
 Features:
-- Improved face tracking with temporal consistency
-- Faster-Whisper Audio Transcription with Keyword Spotting
-- FastAPI REST endpoints
+- Enhanced OpenCV Face Detection (Frontal + Profile)
+- Precise timestamp synchronization via CAP_PROP_POS_MSEC
+- Faster-Whisper Audio Transcription (base model)
+- Audio alerts with start/end times
 """
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
@@ -31,8 +32,8 @@ logger = logging.getLogger(__name__)
 # Initialize FastAPI app
 app = FastAPI(
     title="OSINT Video Analysis Platform",
-    description="Advanced video analysis with facial detection and audio keyword spotting",
-    version="3.1.0"
+    description="Advanced video analysis with face detection and audio transcription",
+    version="3.2.0"
 )
 
 # CORS configuration
@@ -45,75 +46,48 @@ app.add_middleware(
 )
 
 
-class ImprovedFaceTracker:
+class EnhancedFaceDetector:
     """
-    Enhanced face detector with tracking capabilities.
-    Uses multiple detection methods and temporal consistency for better accuracy.
+    Enhanced OpenCV face detector with multiple methods for better coverage.
     """
     
     def __init__(self, min_confidence: float = 0.6):
-        """
-        Initialize Face Tracker.
-        
-        Args:
-            min_confidence: Minimum confidence threshold (lowered for better recall)
-        """
+        """Initialize face detectors."""
         self.min_confidence = min_confidence
         
-        # Initialize multiple detectors for redundancy
-        self.haar_face = cv2.CascadeClassifier(
+        # Load Haar cascades
+        self.haar_frontal = cv2.CascadeClassifier(
             cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
         )
         self.haar_profile = cv2.CascadeClassifier(
             cv2.data.haarcascades + 'haarcascade_profileface.xml'
         )
         
-        # Try to load DNN model (more accurate but optional)
-        self.dnn_available = False
-        try:
-            # These files need to be downloaded separately
-            # For now, we'll rely on Haar cascades
-            pass
-        except:
-            pass
-        
-        logger.info(f"Enhanced Face Tracker initialized (confidence: {min_confidence})")
-        logger.info("Using: Haar Cascade (frontal + profile)")
+        logger.info(f"Enhanced Face Detector initialized (confidence: {min_confidence})")
     
     def detect_faces(self, frame: np.ndarray) -> List[Dict]:
-        """
-        Detect faces using multiple methods for better coverage.
-        
-        Args:
-            frame: Input frame (BGR format from OpenCV)
-            
-        Returns:
-            List of face detections with bounding boxes
-        """
+        """Detect faces using multiple methods."""
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        
-        # Apply histogram equalization for better detection in varying lighting
         gray = cv2.equalizeHist(gray)
         
         all_faces = []
         
-        # Detect frontal faces
-        frontal_faces = self.haar_face.detectMultiScale(
+        # Frontal faces
+        frontal_faces = self.haar_frontal.detectMultiScale(
             gray,
-            scaleFactor=1.05,  # Smaller steps for better detection
-            minNeighbors=3,     # Lower threshold to catch more faces
-            minSize=(20, 20),   # Smaller minimum size
+            scaleFactor=1.05,
+            minNeighbors=3,
+            minSize=(20, 20),
             flags=cv2.CASCADE_SCALE_IMAGE
         )
         
         for (x, y, w, h) in frontal_faces:
             all_faces.append({
                 "box": [int(y), int(x), int(h), int(w)],
-                "confidence": 0.85,
-                "type": "frontal"
+                "confidence": 0.85
             })
         
-        # Detect profile faces (left and right)
+        # Profile faces
         profile_faces = self.haar_profile.detectMultiScale(
             gray,
             scaleFactor=1.05,
@@ -123,158 +97,210 @@ class ImprovedFaceTracker:
         )
         
         for (x, y, w, h) in profile_faces:
-            # Check if this overlaps with any frontal detection
+            # Check for overlaps
             is_duplicate = False
             for existing in all_faces:
                 ey, ex, eh, ew = existing["box"]
-                # Calculate overlap
                 overlap_x = max(0, min(x + w, ex + ew) - max(x, ex))
                 overlap_y = max(0, min(y + h, ey + eh) - max(y, ey))
                 overlap_area = overlap_x * overlap_y
                 
-                if overlap_area > 0.3 * (w * h):  # 30% overlap threshold
+                if overlap_area > 0.3 * (w * h):
                     is_duplicate = True
                     break
             
             if not is_duplicate:
                 all_faces.append({
                     "box": [int(y), int(x), int(h), int(w)],
-                    "confidence": 0.75,
-                    "type": "profile"
+                    "confidence": 0.75
                 })
         
         return all_faces
 
 
-class AudioKeywordSpotter:
-    """
-    Audio transcription and keyword spotting using Faster-Whisper.
-    Extracts audio from video and identifies keyword occurrences.
-    """
+class AudioTranscriber:
+    """Audio transcription with Faster-Whisper."""
     
-    def __init__(self, model_size: str = "tiny"):
-        """
-        Initialize Faster-Whisper model.
-        
-        Args:
-            model_size: Whisper model size ('tiny', 'base', 'small', 'medium', 'large')
-        """
-        self.model = WhisperModel(model_size, device="cpu", compute_type="int8")
-        logger.info(f"Faster-Whisper initialized with {model_size} model")
+    def __init__(self, model_size: str = "base"):
+        """Initialize Whisper model."""
+        try:
+            self.model = WhisperModel(model_size, device="cpu", compute_type="int8")
+            logger.info(f"Faster-Whisper initialized with {model_size} model")
+        except Exception as e:
+            logger.error(f"Failed to initialize Whisper: {e}")
+            self.model = WhisperModel("tiny", device="cpu", compute_type="int8")
+            logger.info("Falling back to tiny model")
     
     def extract_and_transcribe(
         self, 
         video_path: str, 
-        keywords_list: List[str]
-    ) -> tuple[List[Dict], str]:
-        """
-        Extract audio from video, transcribe it, and spot keywords.
-        
-        Args:
-            video_path: Path to video file
-            keywords_list: List of keywords to search for (case-insensitive)
-            
-        Returns:
-            Tuple of (audio_hits, audio_path)
-        """
+        keywords: List[str]
+    ) -> tuple[List[Dict], Optional[str]]:
+        """Extract audio and find keywords."""
         audio_path = None
-        audio_hits = []
+        audio_alerts = []
         
         try:
-            logger.info(f"Extracting audio from video: {video_path}")
+            logger.info(f"Extracting audio from: {video_path}")
             video = VideoFileClip(video_path)
             
-            # Check if video has audio
             if video.audio is None:
                 logger.warning("Video has no audio track")
                 video.close()
                 return [], None
             
-            # Create temporary audio file
             audio_path = tempfile.NamedTemporaryFile(suffix=".wav", delete=False).name
             video.audio.write_audiofile(audio_path, logger=None, verbose=False)
             video.close()
             
             logger.info(f"Audio extracted to: {audio_path}")
-            logger.info(f"Searching for keywords: {keywords_list}")
             
-            # Transcribe audio
-            logger.info("Transcribing audio with Faster-Whisper...")
+            if not keywords:
+                logger.info("No keywords provided, skipping transcription")
+                return [], audio_path
+            
+            logger.info(f"Transcribing audio and searching for: {keywords}")
+            
             segments, info = self.model.transcribe(
-                audio_path, 
+                audio_path,
                 beam_size=5,
-                language="es",  # Set to Spanish for better accuracy with Spanish content
-                condition_on_previous_text=True
+                language="es",
+                condition_on_previous_text=True,
+                vad_filter=True
             )
             
-            # Convert keywords to lowercase for case-insensitive matching
-            keywords_lower = [kw.strip().lower() for kw in keywords_list if kw.strip()]
+            keywords_lower = [kw.strip().lower() for kw in keywords if kw.strip()]
             
-            logger.info(f"Keywords normalized: {keywords_lower}")
-            
-            # Process segments and find keyword matches
             segment_count = 0
             for segment in segments:
                 segment_count += 1
                 text = segment.text.strip()
                 text_lower = text.lower()
                 
-                logger.info(f"Segment {segment_count} ({segment.start:.1f}s): {text}")
-                
-                # Check if any keyword is in this segment
                 for keyword in keywords_lower:
                     if keyword in text_lower:
-                        audio_hits.append({
-                            "timestamp": float(segment.start),
+                        audio_alerts.append({
+                            "start": float(segment.start),
+                            "end": float(segment.end),
                             "text": text,
                             "keyword": keyword
                         })
-                        logger.info(f"✓ Keyword '{keyword}' FOUND at {segment.start}s in: {text}")
+                        logger.info(f"✓ Keyword '{keyword}' found at {segment.start:.1f}s: {text}")
             
-            logger.info(f"Audio analysis complete. Processed {segment_count} segments, found {len(audio_hits)} keyword matches.")
+            logger.info(f"Transcription complete: {segment_count} segments, {len(audio_alerts)} matches")
             
         except Exception as e:
-            logger.error(f"Error during audio extraction/transcription: {e}", exc_info=True)
+            logger.error(f"Audio processing error: {e}", exc_info=True)
         
-        return audio_hits, audio_path
+        return audio_alerts, audio_path
 
 
-# Initialize detectors (singleton pattern)
-face_tracker = ImprovedFaceTracker(min_confidence=0.6)
-audio_spotter = AudioKeywordSpotter(model_size="tiny")
+def process_video(file_path: str, keywords: List[str]) -> Dict:
+    """Process video with face detection and audio transcription."""
+    # Initialize
+    face_detector = EnhancedFaceDetector(min_confidence=0.6)
+    audio_transcriber = AudioTranscriber(model_size="base")
+    
+    # Audio processing
+    audio_alerts, audio_path = audio_transcriber.extract_and_transcribe(file_path, keywords)
+    
+    # Video processing with precise timestamps
+    logger.info("Starting video face detection...")
+    cap = cv2.VideoCapture(file_path)
+    
+    if not cap.isOpened():
+        raise ValueError("Failed to open video file")
+    
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    video_duration = total_frames / fps if fps > 0 else 0
+    
+    face_detections = []
+    frame_skip = 3  # Process every 3rd frame
+    frame_count = 0
+    frames_analyzed = 0
+    
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        
+        if frame_count % frame_skip == 0:
+            # Get precise timestamp from video position
+            timestamp_ms = cap.get(cv2.CAP_PROP_POS_MSEC)
+            timestamp = timestamp_ms / 1000.0
+            
+            # Detect faces
+            faces = face_detector.detect_faces(frame)
+            
+            if faces:
+                # Convert numpy types to Python native
+                faces_serializable = []
+                for face in faces:
+                    box = [int(x) if isinstance(x, (np.integer, np.int32, np.int64)) else float(x) 
+                           for x in face["box"]]
+                    faces_serializable.append({
+                        "box": box,
+                        "confidence": float(face["confidence"])
+                    })
+                
+                face_detections.append({
+                    "timestamp": round(timestamp, 3),  # More precision
+                    "faces": faces_serializable
+                })
+            
+            frames_analyzed += 1
+        
+        frame_count += 1
+    
+    cap.release()
+    
+    logger.info(f"Video analysis complete: {len(face_detections)} frames with faces detected")
+    
+    # Cleanup audio file
+    if audio_path and os.path.exists(audio_path):
+        try:
+            os.unlink(audio_path)
+            logger.info("Temporary audio file deleted")
+        except Exception as e:
+            logger.warning(f"Failed to delete audio file: {e}")
+    
+    return {
+        "fps": round(fps, 2),
+        "video_duration": round(video_duration, 2),
+        "total_frames": total_frames,
+        "frames_analyzed": frames_analyzed,
+        "faces": face_detections,
+        "audio_alerts": audio_alerts
+    }
 
 
 @app.get("/")
 async def root():
-    """Root endpoint with API information."""
+    """Root endpoint."""
     return {
         "service": "OSINT Video Analysis Platform",
-        "version": "3.1.0",
+        "version": "3.2.0",
         "features": [
-            "Enhanced Face Tracking (Frontal + Profile)",
-            "Temporal Consistency Filtering",
-            "Faster-Whisper Audio Transcription",
-            "Keyword Spotting (Spanish/English)",
-            "Real-time Analysis"
-        ],
-        "endpoints": {
-            "/analyze": "POST - Analyze video with face detection and audio keywords",
-            "/health": "GET - Health check",
-            "/docs": "GET - Interactive API documentation"
-        }
+            "Enhanced OpenCV Face Detection (Frontal + Profile)",
+            "Precise timestamp synchronization (CAP_PROP_POS_MSEC)",
+            "Faster-Whisper Audio Transcription (base model)",
+            "Audio alerts with start/end times",
+            "VAD filtering for silence removal"
+        ]
     }
 
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
+    """Health check."""
     return {
         "status": "healthy",
         "service": "osint-video-analysis",
-        "version": "3.1.0",
+        "version": "3.2.0",
         "models": {
-            "face_detection": "OpenCV Haar Cascade (Frontal + Profile)",
-            "audio_transcription": "Faster-Whisper (tiny, Spanish/English)"
+            "face_detection": "OpenCV Enhanced (Frontal + Profile)",
+            "audio_transcription": "Faster-Whisper (base, Spanish/English)"
         }
     }
 
@@ -284,18 +310,8 @@ async def analyze_video(
     file: UploadFile = File(...),
     keywords: Optional[str] = Form(None)
 ):
-    """
-    Analyze video with face detection and audio keyword spotting.
-    
-    Args:
-        file: Video file (MP4, AVI, MOV, MKV, WEBM)
-        keywords: Comma-separated list of keywords to search for in audio
-        
-    Returns:
-        JSON with face detections and audio keyword hits
-    """
+    """Analyze video with face detection and audio keywords."""
     video_path = None
-    audio_path = None
     
     try:
         # Validate file type
@@ -308,133 +324,59 @@ async def analyze_video(
                 detail=f"Unsupported file type. Allowed: {', '.join(allowed_extensions)}"
             )
         
-        # Save uploaded video to temporary file
+        # Save video
         video_path = tempfile.NamedTemporaryFile(suffix=file_ext, delete=False).name
         
         with open(video_path, "wb") as buffer:
             content = await file.read()
             buffer.write(content)
         
-        logger.info(f"Video saved to: {video_path}")
-        logger.info(f"Raw keywords received: '{keywords}'")
+        logger.info(f"Video uploaded: {file.filename} ({len(content)} bytes)")
         
-        # Parse keywords - handle None and empty strings
+        # Parse keywords
         keywords_list = []
         if keywords and keywords.strip():
             keywords_list = [kw.strip() for kw in keywords.split(",") if kw.strip()]
         
-        logger.info(f"Parsed keywords list: {keywords_list}")
+        logger.info(f"Keywords: {keywords_list}")
         
-        # ===== FACE DETECTION =====
-        logger.info("Starting enhanced face detection...")
-        cap = cv2.VideoCapture(video_path)
+        # Process video
+        results = process_video(video_path, keywords_list)
         
-        if not cap.isOpened():
-            raise HTTPException(status_code=400, detail="Failed to open video file")
-        
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        video_duration = total_frames / fps if fps > 0 else 0
-        
-        face_detections = []
-        frame_skip = 3  # Process every 3rd frame (increased frequency for better tracking)
-        frame_count = 0
-        
-        # Tracking history for temporal consistency
-        previous_faces = []
-        
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
-                break
-            
-            # Only process every 3rd frame
-            if frame_count % frame_skip == 0:
-                timestamp = frame_count / fps
-                
-                # Detect faces in this frame
-                faces = face_tracker.detect_faces(frame)
-                
-                # Add timestamp to each detection
-                for face in faces:
-                    # Convert numpy types to Python native types for JSON serialization
-                    box = [int(x) if isinstance(x, (np.integer, np.int32, np.int64)) else float(x) for x in face["box"]]
-                    
-                    face_detections.append({
-                        "timestamp": round(timestamp, 2),
-                        "box": box,
-                        "confidence": float(face["confidence"]),
-                        "type": face.get("type", "frontal")
-                    })
-                
-                previous_faces = faces
-            
-            frame_count += 1
-        
-        cap.release()
-        logger.info(f"Face detection complete. Found {len(face_detections)} face instances across {frame_count // frame_skip} analyzed frames.")
-        
-        # ===== AUDIO KEYWORD SPOTTING =====
-        audio_hits = []
-        
-        if keywords_list:
-            logger.info(f"Starting audio keyword spotting for keywords: {keywords_list}")
-            try:
-                audio_hits, audio_path = audio_spotter.extract_and_transcribe(
-                    video_path, 
-                    keywords_list
-                )
-                logger.info(f"Audio analysis returned {len(audio_hits)} hits")
-            except Exception as e:
-                logger.error(f"Audio analysis failed: {e}", exc_info=True)
-                audio_hits = []
-        else:
-            logger.info("No keywords provided, skipping audio analysis")
-        
-        # ===== PREPARE RESPONSE =====
+        # Response
         response = {
             "status": "success",
             "filename": file.filename,
-            "video_duration": round(video_duration, 2),
-            "frames_analyzed": frame_count // frame_skip,
-            "total_frames": total_frames,
-            "fps": round(fps, 2),
-            "faces": face_detections,
-            "audio_hits": audio_hits,
+            "fps": results["fps"],
+            "video_duration": results["video_duration"],
+            "total_frames": results["total_frames"],
+            "frames_analyzed": results["frames_analyzed"],
+            "faces": results["faces"],
+            "audio_alerts": results["audio_alerts"],
             "detection_config": {
-                "face_detector": "OpenCV Haar Cascade (Frontal + Profile)",
-                "min_confidence": face_tracker.min_confidence,
-                "frame_skip": frame_skip,
-                "audio_model": "Faster-Whisper (tiny, Spanish)" if keywords_list else "disabled",
+                "face_detector": "OpenCV Enhanced (Frontal + Profile)",
+                "min_confidence": 0.6,
+                "frame_skip": 3,
+                "audio_model": "Faster-Whisper (base)" if keywords_list else "disabled",
                 "keywords_searched": keywords_list
             }
         }
-        
-        logger.info(f"Analysis complete. Returning response with {len(face_detections)} faces and {len(audio_hits)} audio hits")
         
         return JSONResponse(content=response)
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error during video analysis: {e}", exc_info=True)
+        logger.error(f"Analysis failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
     
     finally:
-        # Cleanup: Delete temporary files
         if video_path and os.path.exists(video_path):
             try:
                 os.unlink(video_path)
-                logger.info(f"Deleted temporary video: {video_path}")
+                logger.info("Temporary video file deleted")
             except Exception as e:
                 logger.warning(f"Failed to delete video file: {e}")
-        
-        if audio_path and os.path.exists(audio_path):
-            try:
-                os.unlink(audio_path)
-                logger.info(f"Deleted temporary audio: {audio_path}")
-            except Exception as e:
-                logger.warning(f"Failed to delete audio file: {e}")
 
 
 if __name__ == "__main__":
