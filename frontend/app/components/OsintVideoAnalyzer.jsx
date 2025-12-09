@@ -1,16 +1,12 @@
 /**
  * OSINT Video Facial Detection Analyzer
- * 
- * Connects to FastAPI backend for:
- * - Face detection using OpenCV (DNN/Haar)
- * - Audio transcription using Faster-Whisper
- * - Keyword spotting in audio
+ * Version 3.1.0 - Enhanced tracking and keyword detection
  */
 
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Play, AlertCircle, CheckCircle, Loader, FileText, Volume2 } from 'lucide-react';
+import { Upload, Play, AlertCircle, CheckCircle, Loader, FileText, Volume2, Search } from 'lucide-react';
 
 const OsintVideoAnalyzer = () => {
   // State management
@@ -68,7 +64,16 @@ const OsintVideoAnalyzer = () => {
       // Create FormData
       const formData = new FormData();
       formData.append('file', videoFile);
-      formData.append('keywords', keywords);
+      
+      // Only append keywords if provided
+      if (keywords && keywords.trim()) {
+        formData.append('keywords', keywords.trim());
+        console.log('Sending keywords:', keywords.trim());
+      } else {
+        console.log('No keywords provided, skipping audio analysis');
+      }
+
+      console.log('Uploading to backend...');
 
       // Upload to backend
       const response = await fetch('http://localhost:8000/analyze', {
@@ -77,11 +82,12 @@ const OsintVideoAnalyzer = () => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
         throw new Error(errorData.detail || 'Analysis failed');
       }
 
       const data = await response.json();
+      console.log('Analysis complete:', data);
       setAnalysisResults(data);
       setAnalysisComplete(true);
 
@@ -116,27 +122,30 @@ const OsintVideoAnalyzer = () => {
     // Get current timestamp
     const currentTime = video.currentTime;
 
-    // Find detections within 0.2 seconds of current time
+    // Find detections within 0.15 seconds of current time (tighter sync)
     const relevantDetections = analysisResults.faces.filter(
-      detection => Math.abs(detection.timestamp - currentTime) <= 0.2
+      detection => Math.abs(detection.timestamp - currentTime) <= 0.15
     );
 
     if (relevantDetections.length > 0) {
       relevantDetections.forEach((detection) => {
         const [ymin, xmin, height, width] = detection.box;
 
-        // Style: Cyber/OSINT aesthetic with glowing green
-        ctx.strokeStyle = '#00ff41';
-        ctx.lineWidth = 4;
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = '#00ff41';
+        // Color based on detection type
+        const color = detection.type === 'profile' ? '#00d4ff' : '#00ff41';
+        
+        // Style: Cyber/OSINT aesthetic with glowing effect
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = color;
 
         // Draw rectangle
         ctx.strokeRect(xmin, ymin, width, height);
 
         // Add corner accents
-        const cornerSize = 20;
-        ctx.lineWidth = 6;
+        const cornerSize = 15;
+        ctx.lineWidth = 5;
 
         // Top-left corner
         ctx.beginPath();
@@ -166,33 +175,48 @@ const OsintVideoAnalyzer = () => {
         ctx.lineTo(xmin + width, ymin + height - cornerSize);
         ctx.stroke();
 
-        // Add "TARGET" label
-        ctx.font = 'bold 16px monospace';
-        ctx.fillStyle = '#00ff41';
-        ctx.shadowBlur = 10;
-        ctx.fillText(`TARGET ${(detection.confidence * 100).toFixed(0)}%`, xmin, ymin - 10);
+        // Add label
+        ctx.font = 'bold 14px monospace';
+        ctx.fillStyle = color;
+        ctx.shadowBlur = 8;
+        
+        const label = detection.type === 'profile' ? 'PROFILE' : 'TARGET';
+        const confidence = (detection.confidence * 100).toFixed(0);
+        ctx.fillText(`${label} ${confidence}%`, xmin, ymin - 8);
       });
     }
 
     // Highlight audio keywords
-    if (analysisResults.audio_hits) {
+    if (analysisResults.audio_hits && analysisResults.audio_hits.length > 0) {
       const relevantAudioHits = analysisResults.audio_hits.filter(
-        hit => Math.abs(hit.timestamp - currentTime) <= 1.0
+        hit => Math.abs(hit.timestamp - currentTime) <= 2.0
       );
 
       if (relevantAudioHits.length > 0) {
-        // Draw audio indicator
-        ctx.fillStyle = '#ff00ff';
+        // Draw audio indicator banner
+        ctx.fillStyle = 'rgba(255, 0, 255, 0.8)';
         ctx.shadowBlur = 20;
         ctx.shadowColor = '#ff00ff';
-        ctx.font = 'bold 20px monospace';
+        ctx.fillRect(10, 10, canvas.width - 20, 60 * relevantAudioHits.length);
+        
+        ctx.font = 'bold 18px monospace';
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = '#000000';
+        ctx.shadowBlur = 5;
         
         relevantAudioHits.forEach((hit, index) => {
           ctx.fillText(
-            `🎤 "${hit.keyword}" detected`, 
+            `🎤 KEYWORD: "${hit.keyword}"`, 
             20, 
-            30 + (index * 30)
+            35 + (index * 60)
           );
+          ctx.font = '14px monospace';
+          ctx.fillText(
+            `"${hit.text.substring(0, 50)}${hit.text.length > 50 ? '...' : ''}"`,
+            20,
+            55 + (index * 60)
+          );
+          ctx.font = 'bold 18px monospace';
         });
       }
     }
@@ -215,10 +239,10 @@ const OsintVideoAnalyzer = () => {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-white mb-2">
-            OSINT Video Analysis Platform
+            OSINT Video Analysis Platform v3.1
           </h1>
           <p className="text-slate-400">
-            AI-powered facial detection and audio keyword spotting with OpenCV and Faster-Whisper
+            Enhanced face tracking (frontal + profile) and audio keyword detection with Spanish language support
           </p>
         </div>
 
@@ -244,25 +268,30 @@ const OsintVideoAnalyzer = () => {
             </div>
 
             {videoFile && (
-              <div className="text-sm text-slate-400">
+              <div className="text-sm text-slate-400 bg-slate-800 p-3 rounded-lg border border-slate-700">
                 <span className="text-blue-400 font-medium">Selected:</span> {videoFile.name}
+                <div className="text-xs text-slate-500 mt-1">
+                  Size: {(videoFile.size / 1024 / 1024).toFixed(2)} MB
+                </div>
               </div>
             )}
 
             {/* Keywords input */}
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
+              <label className="block text-sm font-medium text-slate-300 mb-2 flex items-center">
+                <Search className="w-4 h-4 mr-2" />
                 Audio Keywords (comma-separated, optional)
               </label>
               <input
                 type="text"
                 value={keywords}
                 onChange={(e) => setKeywords(e.target.value)}
-                placeholder="e.g. bomb, weapon, suspicious"
-                className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                placeholder="e.g. amor, mujer, Borges"
+                className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50"
               />
               <p className="text-xs text-slate-500 mt-1">
-                Enter keywords to search for in the audio track. Leave empty to skip audio analysis.
+                Enter keywords in Spanish or English. The system will search for these words in the audio transcription.
+                Leave empty to skip audio analysis.
               </p>
             </div>
 
@@ -271,7 +300,7 @@ const OsintVideoAnalyzer = () => {
               <button
                 onClick={startAnalysis}
                 disabled={isAnalyzing}
-                className={`flex items-center justify-center px-6 py-3 rounded-lg font-semibold transition-all ${
+                className={`w-full flex items-center justify-center px-6 py-3 rounded-lg font-semibold transition-all ${
                   isAnalyzing
                     ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
                     : 'bg-emerald-600 hover:bg-emerald-700 text-white'
@@ -280,7 +309,7 @@ const OsintVideoAnalyzer = () => {
                 {isAnalyzing ? (
                   <>
                     <Loader className="w-5 h-5 mr-2 animate-spin" />
-                    Analyzing...
+                    Analyzing video... This may take a minute
                   </>
                 ) : (
                   <>
@@ -316,7 +345,7 @@ const OsintVideoAnalyzer = () => {
           <div className="bg-slate-900 rounded-xl border border-slate-800 p-6 mb-6">
             <h2 className="text-xl font-bold text-white mb-4">Analysis Results</h2>
             
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
               <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
                 <div className="text-2xl font-bold text-blue-400">{analysisResults.video_duration}s</div>
                 <div className="text-sm text-slate-400">Duration</div>
@@ -334,28 +363,45 @@ const OsintVideoAnalyzer = () => {
               
               <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
                 <div className="text-2xl font-bold text-pink-400">{analysisResults.audio_hits.length}</div>
-                <div className="text-sm text-slate-400">Audio Matches</div>
+                <div className="text-sm text-slate-400">Keyword Matches</div>
               </div>
             </div>
+
+            {/* Keywords searched */}
+            {analysisResults.detection_config.keywords_searched && analysisResults.detection_config.keywords_searched.length > 0 && (
+              <div className="mb-6 bg-slate-800 rounded-lg p-4 border border-slate-700">
+                <h3 className="text-sm font-bold text-white mb-2 flex items-center">
+                  <Search className="w-4 h-4 mr-2" />
+                  Keywords Searched
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {analysisResults.detection_config.keywords_searched.map((kw, idx) => (
+                    <span key={idx} className="px-3 py-1 bg-blue-900/50 text-blue-300 rounded-full text-sm border border-blue-700">
+                      {kw}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Audio hits list */}
             {analysisResults.audio_hits.length > 0 && (
               <div className="mt-6">
                 <h3 className="text-lg font-bold text-white mb-3 flex items-center">
                   <Volume2 className="w-5 h-5 mr-2 text-pink-400" />
-                  Audio Keyword Matches
+                  Audio Keyword Matches ({analysisResults.audio_hits.length})
                 </h3>
-                <div className="space-y-2">
+                <div className="space-y-2 max-h-64 overflow-y-auto">
                   {analysisResults.audio_hits.map((hit, index) => (
-                    <div key={index} className="bg-slate-800 rounded-lg p-3 border border-slate-700">
+                    <div key={index} className="bg-slate-800 rounded-lg p-3 border border-slate-700 hover:border-pink-500 transition-colors">
                       <div className="flex items-start justify-between">
                         <div>
-                          <span className="text-pink-400 font-mono text-sm">{hit.timestamp.toFixed(1)}s</span>
+                          <span className="text-pink-400 font-mono text-sm font-bold">{hit.timestamp.toFixed(1)}s</span>
                           <span className="text-slate-500 mx-2">•</span>
                           <span className="text-emerald-400 font-semibold">"{hit.keyword}"</span>
                         </div>
                       </div>
-                      <div className="text-sm text-slate-300 mt-1">"{hit.text}"</div>
+                      <div className="text-sm text-slate-300 mt-1 italic">"{hit.text}"</div>
                     </div>
                   ))}
                 </div>
@@ -395,12 +441,13 @@ const OsintVideoAnalyzer = () => {
             <div className="mt-6 bg-slate-800 rounded-lg p-4 border border-slate-700">
               <h3 className="text-sm font-bold text-white mb-2">Detection Information</h3>
               <div className="text-xs text-slate-400 space-y-1">
-                <p>• <span className="text-emerald-400">Green boxes</span>: Face detections with confidence scores</p>
-                <p>• <span className="text-pink-400">Pink text</span>: Audio keyword matches at current timestamp</p>
+                <p>• <span className="text-emerald-400">Green boxes</span>: Frontal face detections</p>
+                <p>• <span className="text-cyan-400">Cyan boxes</span>: Profile face detections</p>
+                <p>• <span className="text-pink-400">Pink banners</span>: Audio keyword matches</p>
                 <p>• Method: {analysisResults.detection_config.face_detector}</p>
-                <p>• Confidence threshold: {analysisResults.detection_config.min_confidence}</p>
+                <p>• Frame skip: Every {analysisResults.detection_config.frame_skip} frames</p>
                 {analysisResults.detection_config.audio_model !== 'disabled' && (
-                  <p>• Audio model: {analysisResults.detection_config.audio_model}</p>
+                  <p>• Audio: {analysisResults.detection_config.audio_model}</p>
                 )}
               </div>
             </div>
@@ -412,10 +459,10 @@ const OsintVideoAnalyzer = () => {
           <h3 className="text-lg font-bold text-white mb-3">Instructions</h3>
           <ol className="space-y-2 text-slate-400 text-sm list-decimal list-inside">
             <li>Click "Select Video File" and choose a video (MP4, AVI, MOV, MKV, WEBM)</li>
-            <li>Optionally, enter keywords to search for in the audio (comma-separated)</li>
-            <li>Click "Start Analysis" to process the video on the server</li>
-            <li>Wait for analysis to complete (this may take a minute for longer videos)</li>
-            <li>Play the video to see face detections and audio keyword matches in real-time</li>
+            <li>Enter keywords in Spanish or English to search in the audio (e.g., "amor, mujer, hombre")</li>
+            <li>Click "Start Analysis" - processing may take 30-60 seconds for longer videos</li>
+            <li>Review the statistics and keyword matches found</li>
+            <li>Play the video to see real-time face tracking and keyword highlights</li>
           </ol>
         </div>
       </div>
